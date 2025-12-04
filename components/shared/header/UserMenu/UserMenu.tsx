@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown, Settings } from "lucide-react";
 import Link from "next/link";
 import Button from "../../button/Button";
 
@@ -92,6 +92,16 @@ export default function UserMenu() {
 
           {/* Menu Items */}
           <div className="py-8">
+            <Link
+              href="/settings"
+              onClick={() => setIsOpen(false)}
+              className="w-full flex items-center gap-12 px-16 py-10 hover:bg-black-alpha-4 transition-colors text-left"
+            >
+              <Settings className="w-16 h-16 text-black-alpha-56" />
+              <span className="text-body-medium text-accent-black">
+                Settings
+              </span>
+            </Link>
             <button
               onClick={handleSignOut}
               className="w-full flex items-center gap-12 px-16 py-10 hover:bg-black-alpha-4 transition-colors text-left"

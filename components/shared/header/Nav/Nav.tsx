@@ -15,8 +15,4 @@ export const NAV_ITEMS = [
     label: "Scouts",
     href: "/scouts",
   },
-  {
-    label: "Settings",
-    href: "/settings",
-  },
 ];

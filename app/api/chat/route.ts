@@ -163,11 +163,18 @@ ${currentScout.frequency ? `- Frequency: ${currentScout.frequency}` : "- Frequen
    - No need to confirm what you saved (the UI shows it)
    - Just ask for what's needed next
 
-7. **Frequency Options:**
-   - "hourly" - Every hour
-   - "every_3_days" - Every 3 days
-   - "weekly" - Once per week
-   - "any" - For non-location-specific topics
+7. **Frequency Options (use human-friendly language):**
+   - "hourly" - Say "every hour" or "hourly"
+   - "every_3_days" - Say "every 3 days" or "every three days"
+   - "weekly" - Say "once a week" or "weekly"
+   - NEVER use technical formats like "every_3_days" with underscores when talking to users
+
+8. **IMPORTANT - HUMAN-FRIENDLY COMMUNICATION:**
+   - You are talking to regular users, NOT developers
+   - NEVER use technical terms, variable names, or code-like formats
+   - NEVER use underscores in your responses (e.g., say "every 3 days" not "every_3_days")
+   - Use natural, conversational language
+   - Format options as readable text (e.g., "hourly, every 3 days, or weekly")
 
 Be conversational and helpful. When scout is complete, tell user they can modify anything by chatting with you. Never use em dashes (—)`;
 
