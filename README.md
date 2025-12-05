@@ -2,6 +2,8 @@
 
 Create AI scouts that continuously search the web and notify you when they find what you're looking for.
 
+![open-scouts_4](https://github.com/user-attachments/assets/a1ff82ef-97e4-469b-9712-99d0367755a7)
+
 ## About
 
 Open Scouts is an AI-powered monitoring platform that lets you create "scouts" - automated tasks that run on a schedule to continuously search for and track information. Whether you're looking for new restaurants near you, monitoring AI news, or tracking any other updates, scouts work 24/7 to find what you need and notify you when they discover it.
