@@ -1,5 +1,5 @@
 import { streamText, UIMessage, convertToModelMessages, stepCountIs } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { getChatModel } from "@/lib/ai-provider";
 import { supabaseServer } from "@/lib/supabase/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { z } from "zod";
@@ -129,7 +129,7 @@ ${currentScout.frequency ? `- Frequency: ${currentScout.frequency}` : "- Frequen
 User's detected location: ${location ? `${location.city} (${location.latitude}, ${location.longitude})` : "Not available"}`;
 
   const result = streamText({
-    model: openai("gpt-5.1-2025-11-13"),
+    model: getChatModel("gpt-5.1-2025-11-13"),
     messages: convertToModelMessages(messages),
     system: systemPrompt,
     toolChoice: "auto",
