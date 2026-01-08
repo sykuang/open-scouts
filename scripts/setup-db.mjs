@@ -261,12 +261,38 @@ async function runMigrations() {
  */
 async function syncEdgeFunctionSecrets() {
   // Define which secrets to sync (env var name -> secret name)
+  // Note: Either OPENAI_API_KEY OR Azure OpenAI credentials are required
   const secretsToSync = [
-    { env: 'OPENAI_API_KEY', name: 'OPENAI_API_KEY', required: true },
+    // Standard OpenAI (required if not using Azure)
+    { env: 'OPENAI_API_KEY', name: 'OPENAI_API_KEY', required: false },
+    // Azure OpenAI (alternative to standard OpenAI)
+    { env: 'AZURE_OPENAI_API_KEY', name: 'AZURE_OPENAI_API_KEY', required: false },
+    { env: 'AZURE_OPENAI_ENDPOINT', name: 'AZURE_OPENAI_ENDPOINT', required: false },
+    { env: 'AZURE_OPENAI_CHAT_DEPLOYMENT', name: 'AZURE_OPENAI_CHAT_DEPLOYMENT', required: false },
+    { env: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', name: 'AZURE_OPENAI_EMBEDDING_DEPLOYMENT', required: false },
+    { env: 'AZURE_OPENAI_API_VERSION', name: 'AZURE_OPENAI_API_VERSION', required: false },
+    // Firecrawl (required)
     { env: 'FIRECRAWL_API_KEY', name: 'FIRECRAWL_API_KEY', required: true },
+    // Email notifications (optional)
     { env: 'RESEND_API_KEY', name: 'RESEND_API_KEY', required: false },
     { env: 'RESEND_FROM_EMAIL', name: 'RESEND_FROM_EMAIL', required: false },
   ];
+
+  // Check if at least one OpenAI provider is configured
+  const hasOpenAI = !!process.env.OPENAI_API_KEY;
+  const hasAzureOpenAI = !!(process.env.AZURE_OPENAI_API_KEY && process.env.AZURE_OPENAI_ENDPOINT);
+
+  if (!hasOpenAI && !hasAzureOpenAI) {
+    console.log('⚠️  No OpenAI provider configured!');
+    console.log('   You must set either:');
+    console.log('   - OPENAI_API_KEY (for standard OpenAI)');
+    console.log('   - AZURE_OPENAI_API_KEY + AZURE_OPENAI_ENDPOINT (for Azure OpenAI)');
+    console.log('   Add one of these to your .env file and run setup again.\n');
+  } else if (hasAzureOpenAI) {
+    console.log('✅ Using Azure OpenAI provider');
+  } else {
+    console.log('✅ Using standard OpenAI provider');
+  }
 
   const secretsToSet = [];
   const missingRequired = [];

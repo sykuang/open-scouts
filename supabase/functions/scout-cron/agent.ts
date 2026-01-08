@@ -18,6 +18,13 @@ import {
   trackEmailNotificationSent,
   trackDuplicateDetected,
 } from "./posthog.ts";
+import {
+  getOpenAIConfig,
+  getChatCompletionsUrl,
+  getEmbeddingsUrl,
+  buildChatRequestBody,
+  buildEmbeddingRequestBody,
+} from "./openai-config.ts";
 
 // Calculate cosine similarity between two vectors
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
@@ -79,11 +86,9 @@ export async function executeScoutAgent(scout: Scout, supabase: any): Promise<vo
   );
 
   try {
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY not configured");
-    }
+    // Get OpenAI configuration (supports both OpenAI and Azure OpenAI)
+    const openaiConfig = getOpenAIConfig();
+    console.log(`Using ${openaiConfig.isAzure ? 'Azure OpenAI' : 'OpenAI'} for inference`);
 
     // Get the user's Firecrawl API key - no fallback, each user must have their own key
     const firecrawlKeyResult = await getFirecrawlKeyForUser(
@@ -273,8 +278,8 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
     stepNumber++;
     await createStep(supabase, executionId, stepNumber, {
       step_type: "tool_call",
-      description: "Initializing agent with OpenAI",
-      input_data: { model: "gpt-5.1-2025-11-13", system: systemPrompt.substring(0, 200) + "..." },
+      description: `Initializing agent with ${openaiConfig.isAzure ? 'Azure OpenAI' : 'OpenAI'}`,
+      input_data: { model: openaiConfig.chatModel, provider: openaiConfig.isAzure ? 'azure' : 'openai', system: systemPrompt.substring(0, 200) + "..." },
       status: "running",
     });
 
@@ -305,49 +310,46 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
+      const chatTools = [
+        {
+          type: "function",
+          function: {
+            name: "searchWeb",
+            description: "Search the web using Firecrawl. Returns results with snippets, published dates, and favicons.",
+            parameters: {
+              type: "object",
+              properties: {
+                query: { type: "string", description: "Search query" },
+                limit: { type: "number", description: "Number of results (1-10)", default: 5 },
+                tbs: { type: "string", description: "Time filter: qdr:h (hour), qdr:d (day), qdr:w (week), qdr:m (month)" },
+              },
+              required: ["query"],
+            },
+          },
         },
-        body: JSON.stringify({
-          model: "gpt-5.1-2025-11-13",
-          messages: conversationMessages,
-          tools: [
-            {
-              type: "function",
-              function: {
-                name: "searchWeb",
-                description: "Search the web using Firecrawl. Returns results with snippets, published dates, and favicons.",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    query: { type: "string", description: "Search query" },
-                    limit: { type: "number", description: "Number of results (1-10)", default: 5 },
-                    tbs: { type: "string", description: "Time filter: qdr:h (hour), qdr:d (day), qdr:w (week), qdr:m (month)" },
-                  },
-                  required: ["query"],
-                },
+        {
+          type: "function",
+          function: {
+            name: "scrapeWebsite",
+            description: "Scrape a URL to get full page content and screenshots. ALWAYS use this to verify search results - scraping is essential for accurate information gathering. Returns markdown content and a screenshot URL.",
+            parameters: {
+              type: "object",
+              properties: {
+                url: { type: "string", description: "URL to scrape" },
               },
+              required: ["url"],
             },
-            {
-              type: "function",
-              function: {
-                name: "scrapeWebsite",
-                description: "Scrape a URL to get full page content and screenshots. ALWAYS use this to verify search results - scraping is essential for accurate information gathering. Returns markdown content and a screenshot URL.",
-                parameters: {
-                  type: "object",
-                  properties: {
-                    url: { type: "string", description: "URL to scrape" },
-                  },
-                  required: ["url"],
-                },
-              },
-            },
-          ],
+          },
+        },
+      ];
+
+      const response = await fetch(getChatCompletionsUrl(openaiConfig), {
+        method: "POST",
+        headers: openaiConfig.headers,
+        body: JSON.stringify(buildChatRequestBody(openaiConfig, conversationMessages, {
+          tools: chatTools,
           tool_choice: "auto",
-        }),
+        })),
         signal: controller.signal,
       });
 
@@ -526,29 +528,25 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
           try {
             console.log(`Generating one-sentence summary...`);
 
-            // Generate a concise one-sentence summary using OpenAI
+            // Generate a concise one-sentence summary
             const summaryController = new AbortController();
             const summaryTimeoutId = setTimeout(() => summaryController.abort(), 60000);
 
-            const summaryResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${OPENAI_API_KEY}`,
-                "Content-Type": "application/json",
+            const summaryMessages = [
+              {
+                role: "system",
+                content: "You are a concise summarizer. Generate a single sentence (max 150 characters) that captures the key finding from the scout execution. Focus on what was discovered, not the process. Be specific and include key details like names, locations, or dates if present."
               },
-              body: JSON.stringify({
-                model: "gpt-5.1-2025-11-13",
-                messages: [
-                  {
-                    role: "system",
-                    content: "You are a concise summarizer. Generate a single sentence (max 150 characters) that captures the key finding from the scout execution. Focus on what was discovered, not the process. Be specific and include key details like names, locations, or dates if present."
-                  },
-                  {
-                    role: "user",
-                    content: `Scout goal: ${scout.goal}\n\nFindings: ${scoutResponse.response}\n\nGenerate a one-sentence summary (max 150 characters) of the key discovery.`
-                  }
-                ],
-              }),
+              {
+                role: "user",
+                content: `Scout goal: ${scout.goal}\n\nFindings: ${scoutResponse.response}\n\nGenerate a one-sentence summary (max 150 characters) of the key discovery.`
+              }
+            ];
+
+            const summaryResponse = await fetch(getChatCompletionsUrl(openaiConfig), {
+              method: "POST",
+              headers: openaiConfig.headers,
+              body: JSON.stringify(buildChatRequestBody(openaiConfig, summaryMessages)),
               signal: summaryController.signal,
             });
 
@@ -564,16 +562,10 @@ REMINDER: Write your final response like a NEWS BRIEF. DO NOT mention your proce
               const embeddingController = new AbortController();
               const embeddingTimeoutId = setTimeout(() => embeddingController.abort(), 60000);
 
-              const embeddingResponse = await fetch("https://api.openai.com/v1/embeddings", {
+              const embeddingResponse = await fetch(getEmbeddingsUrl(openaiConfig), {
                 method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${OPENAI_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  model: "text-embedding-3-small",
-                  input: summaryText,
-                }),
+                headers: openaiConfig.headers,
+                body: JSON.stringify(buildEmbeddingRequestBody(openaiConfig, summaryText)),
                 signal: embeddingController.signal,
               });
 
